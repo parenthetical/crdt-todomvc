@@ -367,12 +367,9 @@ todoItem todo = do
               $ updated editing'
         (editBoxOpE, stopEditingE) <-
           editTaskInput setEditValue
-        -- Determine the current editing state; initially false, but
-        -- can be modified by various events
+        -- Determine the current editing state; initially false.
         editing <- holdDyn False $ leftmost [ True <$ startEditing
                                             , False <$ stopEditingE
-                                            -- TODO add this back via blur?
-                                            -- , False <$ cancelEdit
                                             ]
         return ( editing
                  -- Put together all the ways the todo item can change itself.
@@ -404,7 +401,7 @@ editTaskInput changeE = do
   inputEl <- (unsafeCastTo IE.HTMLInputElement $ _element_raw e)
   performEvent_ (IE.setValue inputEl <$> changeE)
   keyDownE <- wrapDomEvent inputEl (`on` GEH.keyDown) $
-              (do ev <- event
+               do ev <- event
                   caret <- IE.getSelectionStart inputEl
                   key <- KE.getKey ev
                   return $
@@ -416,9 +413,9 @@ editTaskInput changeE = do
                    , if key == "Enter"
                      then Just ()
                      else Nothing
-                   ))
-  return $ (fmapMaybe fst keyDownE, fmapMaybe snd keyDownE)
-  
+                   )
+  blurE <- wrapDomEvent inputEl (`on` GEH.blur) $ return ()
+  return $ (fmapMaybe fst keyDownE, fmapMaybe snd keyDownE <> blurE)
 
 
 -- | Display the control footer; return an event that fires when the
