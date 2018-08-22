@@ -40,11 +40,7 @@
 -- (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 -- OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
--- module Reflex.TodoMVC where
-
 import Prelude hiding (mapM, mapM_, all, sequence)
-
---import Control.Monad hiding (mapM, mapM_, forM, forM_, sequence)
 import Control.Monad.Fix
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -52,29 +48,25 @@ import Data.Foldable
 import Data.Monoid ((<>))
 import Data.Text (Text)
 import qualified Data.Text as T
--- import qualified Data.Text.Lazy as TL
 import qualified Data.List as List
 import Data.Text.Encoding (encodeUtf8)
-import Language.Javascript.JSaddle
 import Control.Lens ((^.))
 import Control.Monad.IO.Class
--- import Control.Monad (void)
--- import Data.Text (Text)
 import Text.Read (readMaybe)
 import Data.Maybe (fromJust)
 import qualified Crdt as C
 import Crdt (Crdt)
--- import qualified Crdt.Local as CL
 import Reflex
 import Reflex.Dom
-import qualified JSDOM.Generated.GlobalEventHandlers as GEH
-import qualified JSDOM.Generated.HTMLInputElement as IE
+import qualified GHCJS.DOM.GlobalEventHandlers as GEH
+import qualified GHCJS.DOM.HTMLInputElement as IE
 import GHCJS.DOM.EventM
-import GHCJS.DOM.Types (unsafeCastTo)
+import GHCJS.DOM.Types (unsafeCastTo,Element(..))
 import GHC.IORef (IORef(..))
-import GHCJS.DOM.Types (Element(..))
-import qualified JSDOM.Generated.KeyboardEvent as KE
+import qualified GHCJS.DOM.KeyboardEvent as KE
 import qualified Crdt.Delta as CD
+import Language.Javascript.JSaddle
+
 
 --------------------------------------------------------------------------------
 -- Model
@@ -215,7 +207,7 @@ mainHeader = el "h1" $ text "todos"
 
 -- | Strip leading and trailing whitespace from the user's entry, and
 -- discard it if nothing remains
-stripDescription :: Text -> Maybe Text
+stripDescription :: T.Text -> Maybe T.Text
 stripDescription d =
   let trimmed = T.strip d
   in if T.null trimmed

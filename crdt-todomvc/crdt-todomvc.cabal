@@ -19,22 +19,21 @@ executable todomvc
   ghc-options:  -threaded -rtsopts "-with-rtsopts=-N" -dynamic -Wall
   build-depends:       MonadRandom
                      , base
-                     , containers
-                     , ghcjs-dom
-                     , data-default
                      , cereal
+                     , containers
+                     , data-default
                      , digest
+                     , ghcjs-dom
                      , jsaddle
                      , lattices
                      , lens
                      , memory
                      , mtl
+                     , profunctors
                      , random
                      , reflex
                      , reflex-dom
                      , text
                      , transformers
-                     , profunctors
-                     , jsaddle-dom
   hs-source-dirs:      src
   default-language:    Haskell2010
