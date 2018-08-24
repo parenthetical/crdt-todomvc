@@ -64,7 +64,7 @@ import GHCJS.DOM.EventM
 import GHCJS.DOM.Types (unsafeCastTo,Element(..))
 import GHC.IORef (IORef(..))
 import qualified GHCJS.DOM.KeyboardEvent as KE
-import qualified Crdt.Delta as CD
+import qualified Crdt.Local as CD
 import Language.Javascript.JSaddle
 
 
@@ -79,7 +79,7 @@ taskDescription :: Task -> String
 taskDescription = snd
 type Tasks = Map TaskId Task
 type I = Int
-type TaskId = CD.Id I
+type TaskId = CD.Id
 type Op = [ ( Maybe TaskId
             , TaskOp
             )
@@ -134,6 +134,7 @@ data Filter
    | Completed -- ^ Completed tasks
    deriving (Show, Eq)
 
+
 -- | Determine whether this Task should be shown when this Filter is in effect
 satisfiesFilter :: Filter -> Task -> Bool
 satisfiesFilter f = case f of
@@ -147,12 +148,16 @@ satisfiesFilter f = case f of
 
 save :: (Show state) => String -> state -> JSM ()
 save wher state = do
-  _ <- jsg "window" ^. js "localStorage" ^. jsf "setItem" (wher,show state)
+  _ <- jsg ("window" :: Text)
+       ^. js ("localStorage" :: Text)
+       ^. jsf ("setItem" :: Text) (wher,show state)
   return ()
 
 load :: (Read state,Show state) => String -> state -> JSM state
 load wher initVal = do
-  jsv <- jsg "window" ^. js "localStorage" ^. jsf "getItem" [wher]
+  jsv <- jsg ("window" :: Text)
+         ^. js ("localStorage" :: Text)
+         ^. jsf ("getItem" :: Text) [wher]
   liftJSM (maybe initVal id
            . readMaybe
            . fromJust
@@ -160,7 +165,9 @@ load wher initVal = do
 
 reset :: String -> JSM ()
 reset wher = do
-  _ <- jsg "window" ^. js "localStorage" ^. jsf "removeItem" [wher]
+  _ <- jsg ("window" :: Text)
+       ^. js ("localStorage" :: Text)
+       ^. jsf ("removeItem" :: Text) [wher]
   return ()
 
 
@@ -173,7 +180,7 @@ main = mainWidgetWithCss (encodeUtf8 css) todoMVC
 todoMVC :: (MonadWidget t m) => m ()
 todoMVC = do
   let CD.Local initState applyOp evalState =
-        CD.compileLocal todoCrdt
+        CD.compile todoCrdt
   start <- liftJSM $ load "state" initState
 --  let (i,start) = (iMaybeNew,initAlgoState)
   ctx <- unJSContextSingleton <$> askJSContext
@@ -181,6 +188,7 @@ todoMVC = do
     elAttr "section" ("class" =: "todoapp") $ do
       mainHeader
       rec
+        -- FIXME Needs to fall back to good state if no parse.
         tasksDyn <-
           foldDyn (\op state -> applyOp state op) start allOps
         let tasksE = --traceEvent "State"

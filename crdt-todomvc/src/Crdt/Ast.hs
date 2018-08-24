@@ -68,6 +68,7 @@ instance (Show id, Read id) => Profunctor (Crdt id) where
 class (Show id, Read id, Ord id) => CId id where
 
 instance CId Int where
+instance CId Integer where
 
 dimapv :: ()
   => (v' -> o -> o') -> (v' -> v) -> Crdt id o' v' -> Crdt id o v
