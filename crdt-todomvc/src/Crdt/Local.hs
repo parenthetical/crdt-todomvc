@@ -164,7 +164,6 @@ compileDct (X o v) =
      foldM (\s' (k, ops') ->
              case s' of
                Nothing -> do
-                 -- TODO empty map -> Nothing
                  mv <- o ops' Nothing
                  return $ case mv of
                    Nothing -> Nothing
@@ -173,7 +172,10 @@ compileDct (X o v) =
                  mv <- o ops' . Map.lookup k $ m
                  return $ case mv of
                    Nothing ->
-                     Just $ Map.delete k m
+                     let m' = Map.delete k m
+                     in if Map.null m'
+                        then Nothing
+                        else Just m'
                    Just v' ->
                      Just $ Map.insert k v' m)
        s
