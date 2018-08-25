@@ -35,5 +35,6 @@ executable todomvc
                      , reflex-dom
                      , text
                      , transformers
+                     , range-set-list
   hs-source-dirs:      src
   default-language:    Haskell2010
