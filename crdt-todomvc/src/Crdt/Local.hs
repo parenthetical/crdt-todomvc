@@ -38,7 +38,7 @@ data Local o v where
     -> Local o v
 
 data X o v where
-  X :: (Show a, Read a, Monoid v, Show v)
+  X :: (Show a, Read a, Monoid v)
     => { _doOp :: [o] -> (Maybe a) -> Ctr (Maybe a)
        , _query :: Maybe a -> Maybe v
        }
@@ -70,30 +70,21 @@ compile' o v xo xv =
 type Ast' = Ast Id
 
 -- TODO use stability
-compileAst :: (Show o, Read o, Show v, Read v)
+compileAst :: (Show o, Read o, Eq o)
   => (v -> Bool) -> Ast' o v -> X o v
 compileAst f ast = case ast of
   Pair a a' ->
     compilePair (compileAst (const True) a) (compileAst (const True) a')
-  Sgr ->
-    compileSgr
-  MonotoneSgr ->
-    compileSgr
-  Lat ->
-    compileLat
-  Dct a ->
-    compileDct (compileAst (const True) a)
-  Conc a ->
-    compileConc (compileAst f a)
-  Clr always a ->
-    compileClr f always (compileAst (const True) a)
-  Lww a ->
-    -- Lww is equivalent to Clear when there is no concurrency.
-    compileLww (compileAst f (Clr True a))
-  IdDct a ->
-    compileIdDct (compileAst (const True) (Dct a))
-  Filter f a ->
-    compileFilter f (compileAst f a)
+  Sgr -> compileSgr
+  MonotoneSgr -> compileSgr
+  Lat -> compileLat
+  Dct a -> compileDct (compileAst (const True) a)
+  Conc a -> compileConc (compileAst f a)
+  Clr always a -> compileClr f always (compileAst (const True) a)
+  -- Lww is equivalent to Clear when there is no concurrency.
+  Lww a -> compileLww (compileAst f (Clr True a))
+  MapId f' a -> compileMapId f' (compileAst f a)
+  Filter f' a -> compileFilter f' (compileAst f' a)
 
 compileFilter :: (v -> Bool)
               -> X o v
@@ -107,18 +98,17 @@ compileFilter f (X o v) =
                   else Nothing)
     . v)
 
-compileIdDct :: X (Id,o) (MonoidMap Id v)
-             -> X (Maybe Id, o) (MonoidMap Id v)
-compileIdDct (X o v) =
+compileMapId :: (Id -> v' -> o -> o')
+             -> X o' v'
+             -> X o v'
+compileMapId f (X o v) =
   X (\ops s -> do
-       ops' <- mapM (\(mid,op) ->
-                       (,op)
-                       <$> (maybe
-                            (modify (+1) >> get)
-                            return
-                            mid))
-               ops
-       o ops' s)
+        let v' = maybe mempty id (v s)
+        ops' <- mapM (\op -> do
+                          i <- modify (+1) >> get 
+                          return $ f i v' op)
+                 ops
+        o ops' s)
   v
 
 
@@ -180,7 +170,7 @@ compileLat =
   id
 
 
-compileDct :: (Ord k, Read k, Show k)
+compileDct :: (Ord k, Show k, Read k)
            => X o v
            -> X (k,o) (MonoidMap k v)
 compileDct (X o v) =

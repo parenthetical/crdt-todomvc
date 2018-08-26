@@ -42,7 +42,7 @@ instance (Serialize ds, Ord k, Serialize k, Serialize k) => Serialize (DotMap i 
 instance (Ord i, Ord k, DotStore i ds) => MeetSemiLattice (DotMap i k ds) where
   (/\) (DotMap a) (DotMap b) =
     DotMap
-    . Map.filter (/= bottom)
+    . Map.filter (not . isBottom)
     $ a /\ b
 
 instance (Ord i, Ord k, JoinSemiLattice ds, DotStore i ds) => BoundedJoinSemiLattice (DotMap i k ds) where
@@ -55,10 +55,11 @@ instance (DotStore i ds, Ord k, Decomposable ds, Ord i) => Decomposable (DotMap 
     $ Map.toList dm
 
 instance (DotStore i ds, Ord k) => DotStore i (DotMap i k ds) where
+  isBottom (DotMap m) = Map.null m
   dots (DotMap m) = joins . List.map dots $ Map.elems m
   differenceCC (DotMap dm) cc =
     DotMap
-    . Map.filter (/= bottom)
+    . Map.filter (not . isBottom)
     . Map.map (`differenceCC` cc)
     $ dm
 

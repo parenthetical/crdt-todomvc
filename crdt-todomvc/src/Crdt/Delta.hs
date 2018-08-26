@@ -56,7 +56,7 @@ type Ctr a = (State (Int,Int)) a
 
 
 
-compile :: (Ord i, Ord t, Read i, Show i, Show t, Read t)
+compile :: (Show i, Read i, Ord i, Ord t, Show t, Read t)
   => Bool
   -> Bool
   -> Bool
@@ -87,7 +87,8 @@ data Comp t i o v where
 
 -- TODO: Implement stability for state based CRDTs so that Filter can
 -- be used.
-compileAst :: (Show i, Read i, Ord i, Ord t, Show o, Read o, Show v, Read v, Read t, Show t)
+compileAst :: ( Ord i, Ord t, Show i, Read i, Show t, Read t, Show o, Read o
+              , Eq o)
            => Ast (Id i) o v
            -> Comp t i o v
 compileAst = \case
@@ -96,13 +97,25 @@ compileAst = \case
   Lat -> compileLat
   Clr always x -> compileClr always (compileAst x)
   Dct x -> compileDct (compileAst x)
-  Pair a b ->
-    compilePair (compileAst a) (compileAst b)
+  Pair a b -> compilePair (compileAst a) (compileAst b)
   Lww x -> compileLww (compileAst x)
-  IdDct x -> compileIdDct (compileAst (Dct x))
   Conc x -> compileConc (compileAst x)
-  Filter f x -> compileFilter f (compileAst x)
+  MapId f' a -> compileMapId f' (compileAst a)
+  Filter f' a -> compileFilter f' (compileAst a)
 
+
+compileMapId :: (Id i -> v' -> o -> o')
+             -> Comp t i o' v'
+             -> Comp t i o v'
+compileMapId f (Comp mutator query) =
+  Comp { mutator =
+         \t i o ccrdt@(CCrdt ds _cc) -> do
+           let v' = maybe mempty id (query ds)
+           (count,_) <- modify (first (+1)) >> get
+           let o' = f (Id (i,count)) v' o
+           mutator t i o' ccrdt
+       , query = query
+       }
 
 compileFilter :: (v -> Bool)
               -> Comp t i o v
@@ -116,7 +129,8 @@ compileFilter f (Comp mutator query) =
                  . query
        }
 
-compileSgr :: forall t i a. (Show i, Read i, Ord i, Ord a, Semigroup a, Show a, Read a)
+compileSgr :: forall t i a. (Ord i, Show i, Read i, Show a, Read a, Eq a
+                            , Semigroup a)
   => Comp t i a (Option a)
 compileSgr =
   Comp { mutator =
@@ -132,7 +146,8 @@ compileSgr =
             $ df)
        }
 
-compileLat :: forall t i a. (Show i, Read i, Ord i, Ord a, BoundedJoinSemiLattice a, Show a, Read a, Ord t, Read t, Show t)
+compileLat :: forall t i a. ( BoundedJoinSemiLattice a, Ord i
+                            , Show a, Read a, Show i, Read i, Eq a)
   => Comp t i a (WrappedLattice a)
 compileLat =
   case compileSgr of
@@ -141,7 +156,7 @@ compileLat =
            , query = fmap (option mempty id) . query
            }
 
-compileClr :: (Ord i, Ord t, Read i, Show i, Read o, Show o, Read v, Show v, Read t, Show t)
+compileClr :: ()
   => Bool
   -> Comp t i o v
   -> Comp t i (Clearable o) v
@@ -161,9 +176,7 @@ compileClr always Comp{mutator,query} =
   , query = query
   }
 
-compilePair :: (Ord i, Read o, Show o, Read o', Show o'
-               , Read v, Show v, Read v', Show v'
-               , Read i, Show i, Read t, Show t, Ord t)
+compilePair :: ()
   => Comp t i o v
   -> Comp t i o' v'
   -> Comp t i (Either o o') (v,v')
@@ -188,7 +201,7 @@ compilePair (Comp mutatora querya) (Comp mutatorb queryb) =
   }
 
 compileDct ::
-  (Ord i, Ord k, Semigroup v, Show k, Read k, Show v, Read v, Ord t, Read t, Show t, Show i, Read i, Show o, Read o)
+  (Ord k, Show k, Read k)
   => Comp t i o v
   -> Comp t i (k,o) (MonoidMap k v)
 compileDct Comp{mutator,query} =
@@ -206,27 +219,8 @@ compileDct Comp{mutator,query} =
          else Just . MonoidMap $ m'
   }
 
--- TODO Re-use Dct
-compileIdDct ::
-  (Ord i, Monoid v, Show v, Read v, Ord t, Read t, Show t, Show i, Read i, Show o, Read o)
-  => Comp t i (Id i,o) (MonoidMap (Id i) v)
-  -> Comp t i (Maybe (Id i),o) (MonoidMap (Id i) v)
-compileIdDct Comp{mutator,query} =
-  Comp
-  { mutator = \t i (mid,o) ccrdt -> do
-      k <- case mid of
-              Nothing -> do
-                (count,_) <- modify (first (+1)) >> get
-                return (Id (i,count))
-              Just id' ->
-                return id'
-      mutator t i (k,o) ccrdt
-  , query = query
-  }
-
 compileLww ::
-  (Ord i, Ord t, Read i, Show i, Read o, Show o, Read v, Show v, Read t, Show t
-  )
+  (Eq t, Ord t, Show i, Read i, Show t, Read t)
   => Comp t i o v
   -> Comp t i o v
 compileLww (Comp mutator query) =
@@ -254,7 +248,7 @@ compileLww (Comp mutator query) =
               }
 
 compileConc :: forall t i o v.
-  (Ord i, Ord t, Read i, Show i, Read o, Show o, Read v, Show v, Read t, Show t)
+  ()
   => Comp t i o v
   -> Comp t i [o] v
 compileConc Comp{mutator,query} =
@@ -272,7 +266,7 @@ type SeqNum = Int
 
 compile' :: forall t i ds o v o' v'.
   ( Ord i, Show i, Read i, DotStore i ds, Show ds, Read ds
-  , Decomposable ds)
+  , Decomposable ds, Eq ds)
   => Bool
   -> Bool
   -> Bool

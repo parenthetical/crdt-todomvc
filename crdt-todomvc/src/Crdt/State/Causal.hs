@@ -53,7 +53,7 @@ instance ( Ord i
 instance (DotStore i ds) => BoundedJoinSemiLattice (CCrdt i ds) where
   bottom = CCrdt bottom CC.empty
 
-instance (Ord i, DotStore i ds) =>
+instance (Ord i, DotStore i ds, Eq ds) =>
   Digestable (CCrdt i ds) (CCrdt i (DotSet i)) where
   digestStrictlyInflates ccrdt digest'' =
     -- TODO: strictlyInflates can be probably be made more performant,

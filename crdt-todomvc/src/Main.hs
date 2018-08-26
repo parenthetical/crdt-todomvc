@@ -190,19 +190,20 @@ todoMVC = do
       rec
         -- FIXME Needs to fall back to good state if no parse.
         tasksDyn <-
-          foldDyn (\op state -> applyOp state op) start allOps
+          foldDyn (\op state -> applyOp state op) initState allOps
         let tasksE = --traceEvent "State"
               (updated tasksDyn)
         performEvent_ . ffor tasksE $
           liftIO . runJSaddle ctx . save "state"
-        let tasks' = traceDyn "CRDT state" (evalState <$> (traceDyn "CRDT Internals" tasksDyn))
+        let tasks' = -- traceDyn "CRDT state" (evalState <$> (traceDyn "CRDT Internals" tasksDyn))
+              evalState <$> tasksDyn
         newTaskE <- taskEntry
         listModifyTasksE <-
           taskList activeFilter -- activeFilter
           tasks'
         (activeFilter, clearCompletedE) <- controls tasks'
         let allOps =
-              traceEvent "Ops"
+--              traceEvent "Ops"
               (newTaskE <> listModifyTasksE <> clearCompletedE)
         return ()
       infoFooter

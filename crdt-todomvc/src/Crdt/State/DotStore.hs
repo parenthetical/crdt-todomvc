@@ -20,10 +20,11 @@ import Algebra.Lattice ((\/), (/\), JoinSemiLattice((\/)), BoundedJoinSemiLattic
                        , joins)
 import Crdt.Dot.VV (VV(..))
 
-class  (Ord ds, Ord i, BoundedJoinSemiLattice ds, MeetSemiLattice ds) =>
+class  (Ord i, BoundedJoinSemiLattice ds, MeetSemiLattice ds) =>
        DotStore i ds | ds -> i where
   dots :: ds -> DS.DotSet i
   differenceCC :: ds -> CausalContext i -> ds
+  isBottom :: ds -> Bool
 
 instance (Ord i) => DotStore i (DS.DotSet i) where
   dots ds = ds

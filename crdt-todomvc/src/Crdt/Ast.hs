@@ -19,56 +19,55 @@ import Algebra.Lattice (JoinSemiLattice((\/)), BoundedJoinSemiLattice(bottom))
 import Data.Bifunctor
 
 data Clearable o = Clear | Do o
-  deriving (Functor, Show, Read)
+  deriving (Functor, Show, Read, Eq, Ord)
 
 data Ast id o v where
-  Sgr :: (Ord a, Semigroup a)
+  Sgr :: (Semigroup a)
     => Ast id a (Option a)
   MonotoneSgr :: (Semigroup a, Ord a)
     => Ast id a (Option a)
-  Lat :: (Ord a, BoundedJoinSemiLattice a)
+  Lat :: (BoundedJoinSemiLattice a)
     => Ast id a (WrappedLattice a)
-  Clr :: (Show o, Read o, Show v, Read v)
+  Clr :: (Show o, Read o, Eq o)
     => Bool
     -> Ast id o v
     -> Ast id (Clearable o) v
-  Dct :: (Ord k, Monoid v, Show k, Read k, Show v, Read v, Show o, Read o)
+  Dct :: (Show k, Read k, Ord k, Show o, Read o, Eq o)
     => Ast id o v
     -> Ast id (k,o) (MonoidMap k v)
-  Pair :: (Monoid v, Monoid v', Show o, Read o, Show o', Read o'
-          , Show v, Read v, Show v', Read v')
+  Pair :: (Show o, Read o, Show o', Read o', Eq o, Eq o')
     => Ast id o v
     -> Ast id o' v'
     -> Ast id (Either o o') (v,v')
-  Lww :: (Show o, Read o, Show v, Read v)
+  Lww :: ()
     => Ast id o v
     -> Ast id o v
-  IdDct :: (Ord id, Monoid v, Show o, Read o, Show v, Read v)
-    => Ast id o v
-    -> Ast id (Maybe id, o) (MonoidMap id v)
-  Conc :: (Show o, Read o, Show v, Read v)
+  Conc :: (Show o, Read o, Eq o)
     => Ast id o v
     -> Ast id [o] v
-  Filter :: (Show o, Read o, Show v, Read v)
+  Filter :: ()
     => (v -> Bool)
     -> Ast id o v
     -> Ast id o v
+  MapId :: (Show o', Read o', Eq o')
+    => (id -> v' -> o -> o')
+    -> Ast id o' v'
+    -> Ast id o v'
 
 data Crdt id o v where
-  Crdt :: (Monoid v', Show o', Read o',
-           Show v', Read v',
-           Show id, Read id
-          , Eq v')
+  Crdt :: ( Monoid v'
+          , Eq v'
+          , Show o', Read o', Eq o')
     => (v' -> o -> o')
     -> (v' -> v)
     -> Ast id o' v'
     -> Crdt id o v
 
-instance (Show id, Read id) => Profunctor (Crdt id) where
+instance () => Profunctor (Crdt id) where
   dimap = dimapv . const
 
 
-class (Show id, Read id, Ord id) => CId id where
+class () => CId id where
 
 instance CId Int where
 instance CId Integer where
@@ -78,16 +77,27 @@ dimapv :: ()
 dimapv o v (Crdt o' v' p) =
   Crdt (\v''_ -> o' v''_ . o (v' v''_)) (v . v') p
 
+mapId :: (Show o, Read o, Eq o)
+      => (id -> o -> o')
+      -> Crdt id o' v
+      -> Crdt id o v
+mapId f (Crdt fo fv p) =
+  Crdt
+  (\_v' o -> o)
+  fv
+  (MapId (\i v'' o ->
+             fo v'' (f i o))
+    p)
 
-semigroup  :: (Show id, Read id, Semigroup a, Show a, Read a, Ord a) => Crdt id a (Maybe a)
+semigroup  :: (Eq a, Semigroup a, Show a, Read a) => Crdt id a (Maybe a)
 semigroup =
   rmap getOption $ Crdt (\_ a -> a) id Sgr
 
-monotoneSemigroup :: (Show id, Read id, Semigroup a, Ord a, Show a, Read a) => Crdt id a (Maybe a)
+monotoneSemigroup :: (Eq a, Semigroup a, Ord a, Show a, Read a) => Crdt id a (Maybe a)
 monotoneSemigroup =
   rmap getOption $ Crdt (\_ a -> a) id MonotoneSgr
 
-boundedLattice :: (BoundedJoinSemiLattice a, Show id, Read id, Show a, Read a, Ord a)
+boundedLattice :: (BoundedJoinSemiLattice a, Eq a, Show a, Read a)
            => Crdt id a a
 boundedLattice =
   Crdt (\_ a -> a) unwrapLattice Lat
@@ -120,22 +130,6 @@ fltr :: (v -> Bool) -> Crdt id o v -> Crdt id o v
 fltr f (Crdt o v p) =
   (Crdt o v (Filter (f . v) p))
 
-iddict :: (Ord id, Show id, Read id)
-     => Crdt id o v
-     -> Crdt id (Maybe id, o) (Map id v)
-iddict (Crdt o v p) =
-  Crdt
-  (\v' (k,o') ->
-     ((k,)
-      $ o (case k of
-              Nothing ->
-                mempty
-              Just k' ->
-                Map.findWithDefault mempty k' . getMonoidMap $ v')
-       o'))
-  (Map.map v . getMonoidMap)
-  (IdDct p)
-
 pair :: Crdt id o v
      -> Crdt id o' v'
      -> Crdt id (Either o o') (v,v')
@@ -157,7 +151,7 @@ lww :: Crdt id o v -> Crdt id o v
 lww (Crdt o v p) =
   Crdt o v (Lww p)
 
-clrAlways ::(Show id, Read id) =>  Crdt id o v -> Crdt id o v
+clrAlways ::() =>  Crdt id o v -> Crdt id o v
 clrAlways = lmap Do . clr True
 
 clrSome :: Crdt id o v -> Crdt id (Clearable o) v

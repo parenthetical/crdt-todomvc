@@ -62,14 +62,14 @@ import Numeric.Natural
 import Data.Bool (bool)
 import Data.Maybe (catMaybes, mapMaybe)
 import qualified Data.Graph as G
-
+import Data.Bifunctor (first)
 
 
 
 
 -- TRIVIAL CRDTs
 
-setOncePickOne :: (CId id, Show a, Read a, Ord a) => Crdt id a (Maybe a)
+setOncePickOne :: (Ord a, Show a, Read a) => Crdt id a (Maybe a)
 setOncePickOne =
   -- TODO somehow error out if already set?
   dimap First (fmap getFirst) $ monotoneSemigroup
@@ -92,12 +92,12 @@ instance (JoinSemiLattice (Const a)) =>
   BoundedJoinSemiLattice (Const a) where
   bottom = ConstUnset
 
-constVal :: (CId id, Show a, Read a, Ord a) => Crdt id a (Const a)
+constVal :: (Ord a, Show a, Read a) => Crdt id a (Const a)
 constVal =
   lmap Const $ boundedLattice
 
 -- Set once, error if set twice or evaluated without being set.
-constValUnsafe :: (CId id, Show a, Read a, Ord a)
+constValUnsafe :: (Ord a, Show a, Read a)
   => Crdt id a a
 constValUnsafe =
   rmap (\(Const a) -> a) constVal
@@ -112,30 +112,30 @@ constValUnsafe =
 
 -- FIXME this won't actually compile to the correct thing, it should
 -- be an anonymous CRDT, i.e. using "boundedLattice".
-eoflag :: (CId id) => Crdt id Bool Bool
+eoflag :: Crdt id Bool Bool
 eoflag =
   dimap (bool [] [()]) (maybe False (const True))
   . concurrent
   $ monotoneSemigroup
 
 -- TODO doublecheck this as well
-edoflag :: (CId id) => Crdt id Bool Bool
+edoflag :: Crdt id Bool Bool
 edoflag = dimap All (maybe False getAll) $ semigroup
 
-gset :: (Ord a, Show a, Read a, CId id) => Crdt id (Set a) (Set a)
+gset :: (Ord a, Show a, Read a) => Crdt id (Set a) (Set a)
 gset = boundedLattice
 
 -- Doesn't check "can't remove before known add" invariant
-twopset :: (Ord a, Show a, Read a, CId id) => Crdt id (SetOp a) (Set a)
+twopset :: (Ord a, Show a, Read a) => Crdt id (SetOp a) (Set a)
 twopset = dimap (\case Add a -> (Set.singleton a, Set.empty)
                        Rem a -> (Set.empty, Set.singleton a))
           (uncurry Set.difference)
           boundedLattice
 
-gcounter :: (CId id) => Crdt id Natural Natural
+gcounter :: Crdt id Natural Natural
 gcounter = dimap Sum (maybe 0 getSum) $ monotoneSemigroup
 
-pncounter :: (CId id) => Crdt id Int Int
+pncounter :: Crdt id Int Int
 pncounter = dimap Sum (maybe 0 getSum) $ semigroup
 
 
@@ -234,6 +234,11 @@ lwwrwset = set lwwdwflag
 
 
 -- SEQUENCES
+iddict :: (Ord id, Show id, Read id, Show o, Read o, Eq o)
+     => Crdt id o v
+     -> Crdt id (Maybe id, o) (Map id v)
+iddict =
+  mapId (\i -> first (maybe i id)) . dict
 
 data SeqOp o = SeqIdx Int (SeqIdxOp o) | SeqReplace [o]
   deriving (Eq,Ord,Show,Read)
@@ -245,7 +250,7 @@ data SeqVtx i = SeqStart | SeqEnd | SeqVtx i
   deriving (Eq,Ord,Show,Read)
 
 
-mutableSequence :: (CId id)
+mutableSequence :: (Ord id, Show id, Read id, Show o, Read o, Eq o)
   => Crdt id o v
   -> Crdt id (SeqOp o) [v]
 mutableSequence c =
@@ -295,7 +300,7 @@ mutableSequence c =
           . topsort)
   $ sequence' c
 
-sequence' :: (CId id)
+sequence' :: (Ord id, Show id, Read id, Show o, Read o, Eq o)
   => Crdt id o v
   -> Crdt id [Clearable
               ( Maybe id
