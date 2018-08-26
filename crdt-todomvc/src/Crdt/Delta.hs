@@ -31,7 +31,7 @@ import Crdt.State.Digestable( Digestable(..)
                             )
 
 import Crdt.State.DotStore (DotStore(..))
-import Crdt.Decomposable
+import Crdt.State.Decomposable
 import Crdt.State.Causal (CCrdt(..))
 import qualified Crdt.State.DotFun as DF
 import qualified Crdt.State.DotMap as DM

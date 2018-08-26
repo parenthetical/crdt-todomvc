@@ -27,7 +27,7 @@ import Crdt.Dot
 import Crdt.State.DotStore (DotStore(..), ccDifferenceDotSet, ccFromDotStore)
 import Crdt.State.Digestable (Digestable(..), MaybeDigest(..)
                              , strictlyInflates)
-import Crdt.Decomposable
+import Crdt.State.Decomposable
 
 data CCrdt i ds =
   CCrdt {dotStore :: ds, causalContext :: CausalContext i}

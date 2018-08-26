@@ -31,7 +31,7 @@ import qualified Crdt.Dot.CausalContext as CC
 import Crdt.State.Causal (CCrdt(..))
 import Crdt.Dot.DotSet (DotSet(..))
 import qualified Crdt.Dot.DotSet as DS
-import Crdt.Decomposable
+import Crdt.State.Decomposable
 import Data.List as List
 
 newtype DotMap i k ds = DotMap { getMap :: Map k ds }

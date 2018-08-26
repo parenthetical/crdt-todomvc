@@ -16,7 +16,7 @@ import qualified Data.Set as Set
 import GHC.Generics (Generic)
 import Data.Serialize
 import Crdt.Dot (Dot(..))
-import Crdt.Decomposable
+import Crdt.State.Decomposable
 import qualified Data.List as List
 
 newtype VV i = VV (Map i Int)

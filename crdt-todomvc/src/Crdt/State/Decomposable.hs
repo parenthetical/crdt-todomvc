@@ -1,4 +1,4 @@
-module Crdt.Decomposable where
+module Crdt.State.Decomposable where
 
 import Algebra.Lattice (BoundedJoinSemiLattice())
 

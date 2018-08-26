@@ -25,7 +25,7 @@ import qualified Crdt.Dot.CausalContext as CC
 import Crdt.State.Causal (CCrdt(..))
 import Crdt.Dot.DotSet (DotSet(..))
 import qualified Crdt.Dot.DotSet as DS
-import Crdt.Decomposable
+import Crdt.State.Decomposable
 import Data.List as List
 
 newtype DotPair i a b = DotPair { getPair :: (a, b) }
@@ -48,6 +48,7 @@ instance (DotStore i a, Decomposable a, DotStore i b, Decomposable b) =>
     (DotPair . (bottom,) <$> decompositions b)
 
 instance (DotStore i a, DotStore i b) => DotStore i (DotPair i a b) where
+  isBottom (DotPair (a,b)) = isBottom a && isBottom b
   dots (DotPair (a,b)) = join (dots a) (dots b)
   differenceCC (DotPair (a,b)) cc =
     DotPair ( differenceCC a cc

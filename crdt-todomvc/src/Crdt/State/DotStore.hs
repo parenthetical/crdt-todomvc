@@ -27,6 +27,7 @@ class  (Ord i, BoundedJoinSemiLattice ds, MeetSemiLattice ds) =>
   isBottom :: ds -> Bool
 
 instance (Ord i) => DotStore i (DS.DotSet i) where
+  isBottom (DS.DotSet ds) = Map.null ds
   dots ds = ds
     
   differenceCC (DS.DotSet ds) (CausalContext cc) =
@@ -40,6 +41,7 @@ instance (Ord i) => DotStore i (DS.DotSet i) where
     ds cc
 
 instance (Ord i) => DotStore i (CausalContext i) where
+  isBottom (CausalContext cc) = Map.null cc
   dots (CausalContext cc) =
     DS.DotSet
     . Map.mapWithKey (\actor (compr,ds) ->
@@ -58,6 +60,7 @@ instance (Ord i) => DotStore i (CausalContext i) where
 
 
 instance (Ord i) => DotStore i (VV i) where
+  isBottom (VV vv) = Map.null vv
   dots (VV vv) = joins . map (DS.singleton . (uncurry Dot)) $ Map.toList vv
   differenceCC (VV vv) (CC.CausalContext cc) =
     VV

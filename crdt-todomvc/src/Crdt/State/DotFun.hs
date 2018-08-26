@@ -33,7 +33,7 @@ import qualified Crdt.Dot.CausalContext as CC
 import Crdt.State.Causal (CCrdt(..))
 import qualified Crdt.Dot.DotSet as DS
 import Crdt.Dot.DotSet (DotSet(..))
-import Crdt.Decomposable
+import Crdt.State.Decomposable
 import qualified Data.List as List
 
 newtype DotFun i v =

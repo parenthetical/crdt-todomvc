@@ -25,7 +25,7 @@ import GHC.Generics (Generic)
 import Data.Serialize
 import Crdt.Dot
 import qualified Data.RangeSet.IntMap as Range
-import Crdt.Decomposable
+import Crdt.State.Decomposable
 
 newtype DotSet i =
   DotSet (Map i (IntSet))

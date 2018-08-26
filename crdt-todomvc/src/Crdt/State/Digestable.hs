@@ -9,7 +9,7 @@ import Data.List as List
 import Algebra.Lattice (joins,joinLeq,JoinSemiLattice((\/)), BoundedJoinSemiLattice(bottom))
 import GHC.Generics (Generic)
 import Data.Serialize
-import Crdt.Decomposable
+import Crdt.State.Decomposable
 
 data MaybeDigest digest crdt
   = DigestDigest digest
