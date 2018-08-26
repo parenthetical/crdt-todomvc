@@ -39,10 +39,12 @@ module Crdt
   , rwset
   , lwwawset
   , lwwrwset
+  , fltr
   , Crdt
   , SeqOp(..)
   , SeqIdxOp(..)
   , Clearable(..)
+  , SetOp(..)
   )
 where
 
@@ -191,7 +193,7 @@ addRemoveMap :: (Ord k, CId id, Show k, Read k)
   => Crdt id (Clearable o) v -> Crdt id (MapOp k o) (Map k v)
 addRemoveMap =
   lmap (\case Apply k o -> (k, Do o); Del k -> (k, Clear))
-  . dict (const True)
+  . dict
 
 
 
@@ -206,8 +208,8 @@ set :: (Ord a, Show a, Read a, CId id) => Crdt id Bool Bool -> Crdt id (SetOp a)
 set flag =
   dimap
   (\case Add a -> (a,True); Rem a -> (a,False))
-  (Map.keysSet . Map.filter (== True))
-  $ dict id flag
+  Map.keysSet
+  (dict (fltr id flag))
 
 gset' :: (Ord a, Show a, Read a, CId id) => Crdt id a (Set a)
 gset' = lmap Add (set eoflag)
@@ -303,8 +305,8 @@ sequence' :: (CId id)
 sequence' c =
   concurrent
   . clrSome
-  . iddict (const True) -- FIXME make something like this work for
-                        -- filter:(\(_, (deleted, _)) -> not deleted).
+  . iddict -- FIXME make something like this work for
+           -- filter:(\(_, (deleted, _)) -> not deleted).
   . concurrent
   $ (pair (concurrent $ pair constValUnsafe constValUnsafe) (concurrent $ pair edoflag c))
 

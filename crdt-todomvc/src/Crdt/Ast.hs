@@ -33,8 +33,7 @@ data Ast id o v where
     -> Ast id o v
     -> Ast id (Clearable o) v
   Dct :: (Ord k, Monoid v, Show k, Read k, Show v, Read v, Show o, Read o)
-    => (v -> Bool)
-    -> Ast id o v
+    => Ast id o v
     -> Ast id (k,o) (MonoidMap k v)
   Pair :: (Monoid v, Monoid v', Show o, Read o, Show o', Read o'
           , Show v, Read v, Show v', Read v')
@@ -45,17 +44,21 @@ data Ast id o v where
     => Ast id o v
     -> Ast id o v
   IdDct :: (Ord id, Monoid v, Show o, Read o, Show v, Read v)
-    => (v -> Bool)
-    -> Ast id o v
+    => Ast id o v
     -> Ast id (Maybe id, o) (MonoidMap id v)
   Conc :: (Show o, Read o, Show v, Read v)
     => Ast id o v
     -> Ast id [o] v
+  Filter :: (Show o, Read o, Show v, Read v)
+    => (v -> Bool)
+    -> Ast id o v
+    -> Ast id o v
 
 data Crdt id o v where
   Crdt :: (Monoid v', Show o', Read o',
            Show v', Read v',
-           Show id, Read id)
+           Show id, Read id
+          , Eq v')
     => (v' -> o -> o')
     -> (v' -> v)
     -> Ast id o' v'
@@ -104,31 +107,35 @@ clr always (Crdt o v p) =
   (Clr always p)
 
 dict :: (Ord k, Show k, Read k) =>
-  (v -> Bool) -> Crdt id o v -> Crdt id (k,o) (Map k v)
-dict f (Crdt o v p) =
+  Crdt id o v -> Crdt id (k,o) (Map k v)
+dict (Crdt o v p) =
   Crdt
   (\v' (k,o') ->
      ((k,) $ o (Map.findWithDefault mempty k . getMonoidMap $ v') o'))
-  -- TODO for now duplicate the filter in v, but this shouldn't be necessary
-  (Map.filter f . Map.map v . getMonoidMap)
-  ((Dct (f . v) p))
+  (Map.map v . getMonoidMap)
+  (Dct p)
 
+
+fltr :: (v -> Bool) -> Crdt id o v -> Crdt id o v
+fltr f (Crdt o v p) =
+  (Crdt o v (Filter (f . v) p))
 
 iddict :: (Ord id, Show id, Read id)
-     => (v -> Bool)
-     -> Crdt id o v
+     => Crdt id o v
      -> Crdt id (Maybe id, o) (Map id v)
-iddict f (Crdt o v p) =
+iddict (Crdt o v p) =
   Crdt
   (\v' (k,o') ->
-     ((k,) $ o (case k of
-                    Nothing -> mempty
-                    Just k' -> Map.findWithDefault mempty k' . getMonoidMap $ v')
+     ((k,)
+      $ o (case k of
+              Nothing ->
+                mempty
+              Just k' ->
+                Map.findWithDefault mempty k' . getMonoidMap $ v')
        o'))
-  -- TODO for now duplicate the filter in v, but this shouldn't be necessary
-  (Map.filter f . Map.map v . getMonoidMap)
-  ((IdDct (f . v) p))
-  
+  (Map.map v . getMonoidMap)
+  (IdDct p)
+
 pair :: Crdt id o v
      -> Crdt id o' v'
      -> Crdt id (Either o o') (v,v')

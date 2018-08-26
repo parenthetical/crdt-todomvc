@@ -40,7 +40,9 @@ import qualified Crdt.Dot.CausalContext as CC
 import Crdt.Dot
 import qualified Crdt.AntiEntropyAlgo as A
 
-import Crdt.Ast
+import Crdt.Ast ( Ast(..), Crdt(..),Clearable(..)
+                , MonoidMap(..),WrappedLattice(..)
+                , CId)
 
 newtype Id i = Id (i,Int)
   deriving (Show,Read,Ord,Eq)
@@ -65,7 +67,7 @@ compile bp rr useAck useDigests (Crdt o v p) =
   case compileAst p of
     Comp mutator query ->
       compile' bp rr useAck useDigests o v mutator
-      (query . dotStore)
+      (maybe mempty id . query . dotStore)
 
 
 
@@ -74,30 +76,45 @@ compile bp rr useAck useDigests (Crdt o v p) =
 data Comp t i o v where
   Comp :: ( DotStore i ds
           , Decomposable ds
-          , Show ds, Read ds, Eq ds) =>
+          , Show ds, Read ds, Eq ds
+          , Monoid v
+          ) =>
        { mutator :: t -> i -> o -> CCrdt i ds -> Ctr (CCrdt i ds)
-       , query :: ds -> v
+       , query :: ds -> Maybe v
        }
        -> Comp t i o v
 
 
-
-
+-- TODO: Implement stability for state based CRDTs so that Filter can
+-- be used.
 compileAst :: (Show i, Read i, Ord i, Ord t, Show o, Read o, Show v, Read v, Read t, Show t)
            => Ast (Id i) o v
            -> Comp t i o v
-compileAst p =
-  case p of
-    Sgr -> compileSgr
-    MonotoneSgr -> compileSgr
-    Lat -> compileLat
-    Clr always x -> compileClr always (compileAst x)
-    Dct f x -> compileDct f (compileAst x)
-    Pair a b -> compilePair (compileAst a) (compileAst b)
-    Lww x -> compileLww (compileAst x)
-    IdDct f x -> compileIdDct f (compileAst (Dct f x))
-    Conc x -> compileConc (compileAst x)
+compileAst = \case
+  Sgr -> compileSgr
+  MonotoneSgr -> compileSgr
+  Lat -> compileLat
+  Clr always x -> compileClr always (compileAst x)
+  Dct x -> compileDct (compileAst x)
+  Pair a b ->
+    compilePair (compileAst a) (compileAst b)
+  Lww x -> compileLww (compileAst x)
+  IdDct x -> compileIdDct (compileAst (Dct x))
+  Conc x -> compileConc (compileAst x)
+  Filter f x -> compileFilter f (compileAst x)
 
+
+compileFilter :: (v -> Bool)
+              -> Comp t i o v
+              -> Comp t i o v
+compileFilter f (Comp mutator query) =
+  Comp { mutator = mutator
+       , query = join
+                 . fmap (\v -> if f v
+                               then Just v
+                               else Nothing)
+                 . query
+       }
 
 compileSgr :: forall t i a. (Show i, Read i, Ord i, Ord a, Semigroup a, Show a, Read a)
   => Comp t i a (Option a)
@@ -109,7 +126,8 @@ compileSgr =
            return $ CCrdt (DF.singleton dot a) (CC.singleton dot)
        , query =
          (\(DF.DotFun df) ->
-            Map.foldMapWithKey
+            Just
+            . Map.foldMapWithKey
             (\_k -> IntMap.foldMapWithKey (\_k -> Option . Just))
             $ df)
        }
@@ -120,7 +138,7 @@ compileLat =
   case compileSgr of
     Comp mutator query ->
       Comp { mutator = \t i -> mutator t i  . WrapLattice
-           , query = option mempty id . query
+           , query = fmap (option mempty id) . query
            }
 
 compileClr :: (Ord i, Ord t, Read i, Show i, Read o, Show o, Read v, Show v, Read t, Show t)
@@ -159,30 +177,41 @@ compilePair (Comp mutatora querya) (Comp mutatorb queryb) =
         Right o' -> do
           CCrdt dsb' cc' <- mutatorb t i o' (CCrdt dsb cc)
           return (CCrdt (DP.DotPair (bottom,dsb')) cc')
-  , query = bimap querya queryb . DP.getPair
+  , query = \dp ->
+      case (bimap querya queryb) . DP.getPair $ dp of
+        (Nothing,Nothing) -> Nothing
+        x -> Just $
+             bimap
+             (maybe mempty id)
+             (maybe mempty id)
+             x
   }
 
 compileDct ::
   (Ord i, Ord k, Semigroup v, Show k, Read k, Show v, Read v, Ord t, Read t, Show t, Show i, Read i, Show o, Read o)
-  => (v -> Bool)
-  -> Comp t i o v
+  => Comp t i o v
   -> Comp t i (k,o) (MonoidMap k v)
-compileDct f Comp{mutator,query} =
+compileDct Comp{mutator,query} =
   Comp
   { mutator = \t i (k,o) (CCrdt (DM.DotMap dm) cc) -> do
       (CCrdt ds cc') <-
         mutator t i o (CCrdt (Map.findWithDefault bottom k dm) cc)
       return $ (CCrdt (DM.singleton k ds) cc')
-  , query = MonoidMap . Map.filter f . Map.map query . DM.getMap
+  , query = \m ->
+      let m' = Map.mapMaybe query . DM.getMap $ m
+          -- TODO: Study this choice implied by "Filter ignores all
+          -- history."
+      in if Map.null m'
+         then Nothing
+         else Just . MonoidMap $ m'
   }
 
 -- TODO Re-use Dct
 compileIdDct ::
   (Ord i, Monoid v, Show v, Read v, Ord t, Read t, Show t, Show i, Read i, Show o, Read o)
-  => (v -> Bool)
-  -> Comp t i (Id i,o) (MonoidMap (Id i) v)
+  => Comp t i (Id i,o) (MonoidMap (Id i) v)
   -> Comp t i (Maybe (Id i),o) (MonoidMap (Id i) v)
-compileIdDct _f Comp{mutator,query} =
+compileIdDct Comp{mutator,query} =
   Comp
   { mutator = \t i (mid,o) ccrdt -> do
       k <- case mid of
@@ -208,8 +237,10 @@ compileLww (Comp mutator query) =
       let getCCrdt =
             \df ->
               case query' df of
-                Option Nothing -> bottom
-                Option (Just es) ->
+                Nothing -> bottom
+                -- This case should never occur.
+                Just (Option Nothing) -> bottom
+                Just (Option (Just es)) ->
                   let maxT = maximum . map fst $ es
                   in joins
                      . map snd

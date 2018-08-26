@@ -91,7 +91,7 @@ type TaskOp =
 todoCrdt :: Crdt TaskId Op Tasks
 todoCrdt =
  C.concurrent
-  (C.iddict (const True)
+  (C.iddict
    (C.concurrent (
       C.clrSome (
           C.pair
@@ -195,7 +195,7 @@ todoMVC = do
               (updated tasksDyn)
         performEvent_ . ffor tasksE $
           liftIO . runJSaddle ctx . save "state"
-        let tasks' = traceDyn "CRDT state" (evalState <$> tasksDyn)
+        let tasks' = traceDyn "CRDT state" (evalState <$> (traceDyn "CRDT Internals" tasksDyn))
         newTaskE <- taskEntry
         listModifyTasksE <-
           taskList activeFilter -- activeFilter
@@ -314,7 +314,6 @@ taskList activeFilter tasksD = elAttr "section" ("class" =: "main") $ do
         . attach (current tasksD)
         $ tag (current toggleAllState) toggleAll
   return (taskOpsE <> toggleAllOpsE)
-
 
 
 -- TODO: Add back cancel editing when an appropriate mechanism
