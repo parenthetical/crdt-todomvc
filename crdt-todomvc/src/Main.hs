@@ -88,27 +88,27 @@ type Op = [ ( Maybe TaskId
           ]
 
 type TaskOp =
-  [C.Clearable (Either Bool (C.SeqOp Char))]
+  [C.Deletable Bool (Either Bool (C.SeqOp Char))]
 
 todoCrdt :: Crdt TaskId Op Tasks
 todoCrdt =
  C.concurrent
   (C.iddict
    (C.concurrent (
-      C.clrSome (
+      C.deletable C.dwflag (
           C.pair
-            C.dwflag
+            C.ewflag
             (C.mutableSequence C.constValUnsafe)))))
 
 newTask :: String -> Op
 newTask description =
-  [(Nothing, [C.Do (Right (C.SeqReplace description))])]
+  [(Nothing, [C.DeletableDo (Right (C.SeqReplace description))])]
 
 setCompleted :: Bool -> TaskOp
-setCompleted c = [C.Do (Left c)]
+setCompleted c = [C.DeletableDo (Left c)]
 
 changeDescription :: (Int, C.SeqIdxOp Char) -> TaskOp
-changeDescription op = [C.Do (Right (uncurry C.SeqIdx $ op))]
+changeDescription op = [C.DeletableDo (Right (uncurry C.SeqIdx $ op))]
 
 clearCompleted :: Tasks -> Op
 clearCompleted tasks =
@@ -123,7 +123,7 @@ toggleCompleted c tasks =
   $ Map.toList tasks
 
 destroy :: TaskOp
-destroy = [C.Clear]
+destroy = [C.Deleted True]
 
 --------------------------------------------------------------------------------
 -- Filters
