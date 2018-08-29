@@ -8,7 +8,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE GADTs, ScopedTypeVariables, DeriveGeneric #-}
 
-module Crdt.Delta (Id,compile) where
+module Crdt.Delta (Id(..),compile,compileLocal) where
 
 import qualified Data.Map as Map
 import Data.Map (Map)
@@ -39,6 +39,7 @@ import qualified Crdt.State.DotPair as DP
 import qualified Crdt.Dot.CausalContext as CC
 import Crdt.Dot
 import qualified Crdt.AntiEntropyAlgo as A
+import qualified Crdt.Local as L
 
 import Crdt.Ast ( Ast(..), Crdt(..),Clearable(..)
                 , MonoidMap(..),WrappedLattice(..)
@@ -48,6 +49,7 @@ newtype Id i = Id (i,Int)
   deriving (Show,Read,Ord,Eq)
 
 instance CId (Id Int) where
+instance CId (Id ()) where
 
 -- FIXME SeqCtr use not OK.
 type Ctr a = (State (Int,Int)) a
@@ -69,7 +71,13 @@ compile bp rr useAck useDigests (Crdt o v p) =
       compile' bp rr useAck useDigests o v mutator
       (maybe mempty id . query . dotStore)
 
-
+compileLocal :: ()
+  => Crdt (Id ()) o v
+  -> L.Local o v
+compileLocal crdt =
+  let A.Algo initState applyOp evalState _ _ =
+        compile True True True True crdt
+  in L.Local initState (\state op -> applyOp 0 () op state) evalState
 
 
 
