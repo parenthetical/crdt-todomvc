@@ -45,6 +45,8 @@ module Crdt
   , SeqIdxOp(..)
   , Clearable(..)
   , SetOp(..)
+  , deletable
+  , Deletable(..)
   )
 where
 
@@ -350,7 +352,16 @@ seqEdges m =
   in start:end:idEdges
 
 
+-- DELETABLE
 
+data Deletable flagop a = Deleted flagop | DeletableDo a
+  deriving (Show,Read,Eq,Ord)
+deletable :: Crdt id a Bool -> Crdt id o v -> Crdt id (Deletable a o) v
+deletable flag c =
+  dimap (\case Deleted op -> Left op; DeletableDo op -> Right op)
+  snd
+  . fltr (not . fst)
+  $ pair flag c
 
 
 -- INSTANCES
