@@ -40,7 +40,7 @@
 -- (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 -- OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import Prelude hiding (mapM, mapM_, all, sequence)
+import Prelude hiding (mapM_, all, sequence)
 import Control.Monad.Fix
 import Data.Map (Map)
 import qualified Data.Map as Map
@@ -64,9 +64,11 @@ import GHCJS.DOM.EventM
 import GHCJS.DOM.Types (unsafeCastTo,Element(..))
 import GHC.IORef (IORef(..))
 import qualified GHCJS.DOM.KeyboardEvent as KE
-import qualified Crdt.Local as CD
+import qualified Crdt.Delta as CD
+import qualified Crdt.AntiEntropyAlgo as A (Algo(..))
 import Language.Javascript.JSaddle
-
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.Bool (bool)
 
 --------------------------------------------------------------------------------
 -- Model
@@ -79,7 +81,7 @@ taskDescription :: Task -> String
 taskDescription = snd
 type Tasks = Map TaskId Task
 type I = Int
-type TaskId = CD.Id
+type TaskId = CD.Id Int
 type Op = [ ( Maybe TaskId
             , TaskOp
             )
@@ -177,38 +179,85 @@ reset wher = do
 main :: IO ()
 main = mainWidgetWithCss (encodeUtf8 css) todoMVC
 
-todoMVC :: (MonadWidget t m) => m ()
+sync :: (Ord i)
+     => (i -> [i] -> a -> ([(i,m)], a))
+     -> (i -> i -> m -> a -> ([(i,m)], a))
+     -> Map i [i]
+     -> Map i a
+     -> Map i a
+sync syncf receivef syncWith states =
+  foldl (\states' (i,js) ->
+           let (toSend,state') =
+                 syncf i js (states' Map.! i)
+           in send receivef i toSend (Map.insert i state' states))
+  states
+  $ Map.toList syncWith
+
+send :: (Ord i)
+     => (i -> i -> m -> a -> ([(i,m)], a))
+     -> i
+     -> [(i,m)]
+     -> Map i a
+     -> Map i a
+send receivef i toSend states =
+  case toSend of
+    [] -> states
+    (j,m):ms ->
+      let (jtoSend, jstate) = receivef j i m (states Map.! j)
+          states' = Map.insert j jstate states
+          states'' = send receivef j jtoSend states'
+      in send receivef i ms states''
+
+todoMVC :: forall t m. (MonadWidget t m) => m ()
 todoMVC = do
-  let CD.Local initState applyOp evalState =
-        CD.compile todoCrdt
-  start <- liftJSM $ load "state" initState
---  let (i,start) = (iMaybeNew,initAlgoState)
+  let A.Algo initState applyOp evalState receivef syncf =
+        CD.compile True True False True todoCrdt
+  -- FIXME Needs to fall back to good state if no parse.
+  let peers = [0,1]
+  let initStates = Map.fromList $ zip peers (repeat initState)
+  syncCh <- _checkbox_value <$> checkbox False def
+  let syncWithDyn = bool Map.empty (Map.fromList [(0,[1]),(1,[0])]) <$> syncCh
+--  start <- liftJSM $ load "state" initStates
   ctx <- unJSContextSingleton <$> askJSContext
   el "div" $ do
-    elAttr "section" ("class" =: "todoapp") $ do
-      mainHeader
-      rec
-        -- FIXME Needs to fall back to good state if no parse.
-        tasksDyn <-
-          foldDyn (\op state -> applyOp state op) initState allOps
-        let tasksE = --traceEvent "State"
-              (updated tasksDyn)
-        performEvent_ . ffor tasksE $
-          liftIO . runJSaddle ctx . save "state"
-        let tasks' = -- traceDyn "CRDT state" (evalState <$> (traceDyn "CRDT Internals" tasksDyn))
-              evalState <$> tasksDyn
-        newTaskE <- taskEntry
-        listModifyTasksE <-
-          taskList activeFilter -- activeFilter
-          tasks'
-        (activeFilter, clearCompletedE) <- controls tasks'
-        let allOps =
---              traceEvent "Ops"
-              (newTaskE <> listModifyTasksE <> clearCompletedE)
-        return ()
-      infoFooter
+    rec
+      nOpsE' <- mapM (\n ->
+                        fmap (n,)
+                        <$>
+                        todoApp (fmap (\(states::Map Int String) -> evalState (states Map.! n))
+                                 statesDyn))
+                peers
+      let nOpsE = mergeList nOpsE' :: Event t (NonEmpty.NonEmpty (Int, Op))
+      statesDyn :: Dynamic t (Map Int String)
+            <- foldDyn (\(syncWith,nOps) (states :: Map Int String) ->
+                           foldl
+                           (\(states'::Map Int String) (n::Int,op::Op) ->
+                               sync syncf receivef syncWith
+                               $ (Map.adjust (applyOp 0 n op) n states'))
+                           (states :: Map Int String)
+                           (NonEmpty.toList nOps :: [(Int,Op)])
+                           :: Map Int String)
+                   (initStates :: Map Int String)
+                   (attachPromptlyDyn syncWithDyn nOpsE)
+    performEvent_
+      . fmap (liftIO . runJSaddle ctx . save "state")
+      . updated
+      $ statesDyn
+    infoFooter
     resetE <- button "Reset"
     performEvent_ $ (liftIO . runJSaddle ctx $ reset "state") <$ resetE
+
+todoApp :: (MonadWidget t m)
+  => Dynamic t Tasks -> m (Event t Op)
+todoApp tasksDyn =
+  elAttr "section" ("class" =: "todoapp") $ do
+    rec
+--      mainHeader
+      newTaskE <- taskEntry
+      listModifyTasksE <- taskList activeFilter tasksDyn
+      (activeFilter, clearCompletedE) <- controls tasksDyn
+    return (newTaskE <> listModifyTasksE <> clearCompletedE)
+
 
 -- | Display the main header
 mainHeader :: DomBuilder t m => m ()
