@@ -50,13 +50,14 @@ data Ast id o v where
     -> Ast id o v
     -> Ast id o v
   MapId :: (Show o', Read o', Eq o')
-    => (id -> v' -> o -> o')
+    => (id -> o -> o')
     -> Ast id o' v'
     -> Ast id o v'
 
 data Crdt id o v where
   Crdt :: ( Monoid v'
           , Eq v'
+          , Show v', Read v'
           , Show o', Read o', Eq o')
     => (v' -> o -> o')
     -> (v' -> v)
@@ -83,9 +84,9 @@ mapId :: (Show o, Read o, Eq o)
       -> Crdt id o v
 mapId f (Crdt fo fv p) =
   Crdt
-  (\_v' o -> o)
+  (,)
   fv
-  (MapId (\i v'' o ->
+  (MapId (\i (v'',o) ->
              fo v'' (f i o))
     p)
 

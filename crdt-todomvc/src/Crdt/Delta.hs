@@ -104,15 +104,14 @@ compileAst = \case
   Filter f' a -> compileFilter f' (compileAst a)
 
 
-compileMapId :: (Id i -> v' -> o -> o')
+compileMapId :: (Id i -> o -> o')
              -> Comp t i o' v'
              -> Comp t i o v'
 compileMapId f (Comp mutator query) =
   Comp { mutator =
-         \t i o ccrdt@(CCrdt ds _cc) -> do
-           let v' = maybe mempty id (query ds)
+         \t i o ccrdt -> do
            (count,_) <- modify (first (+1)) >> get
-           let o' = f (Id (i,count)) v' o
+           let o' = f (Id (i,count)) o
            mutator t i o' ccrdt
        , query = query
        }

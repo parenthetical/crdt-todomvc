@@ -98,15 +98,14 @@ compileFilter f (X o v) =
                   else Nothing)
     . v)
 
-compileMapId :: (Id -> v' -> o -> o')
+compileMapId :: (Id -> o -> o')
              -> X o' v'
              -> X o v'
 compileMapId f (X o v) =
   X (\ops s -> do
-        let v' = maybe mempty id (v s)
         ops' <- mapM (\op -> do
-                          i <- modify (+1) >> get 
-                          return $ f i v' op)
+                          i <- modify (+1) >> get
+                          return $ f i op)
                  ops
         o ops' s)
   v
