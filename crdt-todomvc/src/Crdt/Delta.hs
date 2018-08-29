@@ -301,7 +301,7 @@ compile' useAck useDigests bp rr o v mutator query =
                read str
              (d,(idCtr',dotCtr')) =
                runState
-               (mutator t i (o (query crdtState) op) bottom)
+               (mutator t i (o (query crdtState) op) crdtState)
                (idCtr,dotCtr)
          in show
             $ state { crdtState = d \/ crdtState
