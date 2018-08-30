@@ -45,7 +45,7 @@ import Control.Monad.Fix
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Foldable
-import Data.Monoid ((<>))
+import Data.Semigroup ((<>), Endo(..))
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.List as List
@@ -208,6 +208,9 @@ send receivef i toSend states =
           states'' = send receivef j jtoSend states'
       in send receivef i ms states''
 
+type AlgoState = String
+type AlgoStates = Map I String
+
 todoMVC :: forall t m. (MonadWidget t m) => m ()
 todoMVC = do
   let A.Algo initState applyOp evalState receivef syncf =
@@ -215,8 +218,8 @@ todoMVC = do
   -- FIXME Needs to fall back to good state if no parse.
   let peers = [0,1]
   let initStates = Map.fromList $ zip peers (repeat initState)
-  syncCh <- _checkbox_value <$> checkbox False def
-  let syncWithDyn = bool Map.empty (Map.fromList [(0,[1]),(1,[0])]) <$> syncCh
+  Checkbox syncDyn syncE <- checkbox False def
+  let syncWithDyn = bool Map.empty (Map.fromList [(0,[1]),(1,[0])]) <$> syncDyn
 --  start <- liftJSM $ load "state" initStates
   ctx <- unJSContextSingleton <$> askJSContext
   el "div" $ do
@@ -228,17 +231,23 @@ todoMVC = do
                                  statesDyn))
                 peers
       let nOpsE = mergeList nOpsE' :: Event t (NonEmpty.NonEmpty (Int, Op))
+      let performSync :: Event t (Endo AlgoStates) =
+            (Endo . sync syncf receivef)
+            <$> (tagPromptlyDyn syncWithDyn syncE)
+      let performUpdate :: Event t (Endo AlgoStates) =
+            Endo
+            . (\(syncWith,nOps) (states :: AlgoStates) ->
+               foldl
+               (\(states'::Map Int String) (n::Int,op::Op) ->
+                   sync syncf receivef syncWith
+                   $ (Map.adjust (applyOp (0::Int) n op) n states'))
+               (states :: Map Int String)
+               (NonEmpty.toList nOps :: [(Int,Op)]))
+            <$> (attachPromptlyDyn syncWithDyn nOpsE)
       statesDyn :: Dynamic t (Map Int String)
-            <- foldDyn (\(syncWith,nOps) (states :: Map Int String) ->
-                           foldl
-                           (\(states'::Map Int String) (n::Int,op::Op) ->
-                               sync syncf receivef syncWith
-                               $ (Map.adjust (applyOp 0 n op) n states'))
-                           (states :: Map Int String)
-                           (NonEmpty.toList nOps :: [(Int,Op)])
-                           :: Map Int String)
-                   (initStates :: Map Int String)
-                   (attachPromptlyDyn syncWithDyn nOpsE)
+            <- foldDyn ($) (initStates :: AlgoStates)
+               . fmap appEndo
+               $ (performSync <> performUpdate)
     performEvent_
       . fmap (liftIO . runJSaddle ctx . save "state")
       . updated
